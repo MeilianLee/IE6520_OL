@@ -4,13 +4,13 @@ import matplotlib.pyplot as plt
 
 
 class Env:
-    def __init__(self, landsize=3):
+    def __init__(self, landsize=3, total_year=10):
         self.landsize = landsize
         self.landuse = None
         self.water = None
         self.year = None
         self.habitat = 0
-        self.total_year = 10
+        self.total_year = total_year
 
     def valid_actions(self, state):
         self.landuse = np.array(state[0])
@@ -45,24 +45,22 @@ class Env:
                 raise ValueError(f"Unknown action: {action}")
 
             self.landuse.sort()
-        reward = -cost
+        reward = -cost * 0.1
         done = self.year >= self.total_year
+        self.year = self.year + 1 if not done else self.year
         if done:
-            if self.habitat >= 2:
-                reward += 5
-            else:
-                reward -= 5
-            if self.water >= 1:
-                reward += 5
-            else:
-                reward -= 5
-        return self.landuse, reward, done
+            if self.habitat < 2:
+                reward -= 1
+            if self.water < 10:
+                reward -= 1
+        return (tuple(self.landuse), self.year, self.water), reward, done
 
     def calc_maintain_cost(self):
         cost_ag = -0.05 * (self.landuse == 0).sum()
         cost_ofr = 0.1 * (self.landuse == 2).sum()
         cost_wl = 0.1 * (self.landuse == 3).sum()
-        self.water += 0.1 * ((self.landuse == 2).sum() + (self.landuse == 3).sum())
+        self.water += (self.landuse == 2).sum() + (self.landuse == 3).sum()
+        self.water = min(self.water, 10)
         return cost_ag + cost_ofr + cost_wl
 
 
@@ -72,36 +70,98 @@ class VIRunner:
         self.landtype = {0: 'Ag', 1: 'Hbt', 2: 'Ofr', 3: 'Wl'}
         self.actions = [0, 1, 2, 3]
         self.landsize = 3
-        self.env = Env(landsize=self.landsize)
         self.horizon = 10
-        self.states = self.init_states()
+        self.env = Env(landsize=self.landsize, total_year=self.horizon)
         self.state_values = {}
+        self.new_state_values = {}
         self.policy = {}
         self.advantage = {}
         self.diff_values = {}
         self.optim = None
         self.step = 0
+        self.states = self.init_states()
 
     def init_states(self):
         landuse = list(itertools.combinations_with_replacement(self.landtype.keys(), self.landsize))
         year = list(range(1, self.horizon+1))
-        water = np.arange(0, 1.1, 0.1)
+        water = list(range(11))
         states = list(itertools.product(landuse, year, water))
-        self.state_values = {s: [0] for s in states}
-        self.policy = {s: None for s in states}
-        self.advantage = {s: None for s in states}
-        self.diff_values = {s: None for s in states}
+        n_states = len(states)
+        self.state_values = np.zeros(n_states)
+        self.new_state_values = np.zeros(n_states)
+        self.policy = np.empty(n_states, dtype=int)
+        self.advantage = np.empty(n_states)
+        self.diff_values = np.empty(n_states)
         return states
 
+    def find_idx(self, state):
+        idx = self.states.index(state)
+        return idx
+
+    def gen_policy(self):
+        for state in self.states:
+            valid_actions = self.env.valid_actions(state)
+            next_state_values = []
+            idx = self.find_idx(state)
+            for action in valid_actions:
+                next_state, reward, _ = self.env.transit(state, action)
+                next_idx = self.find_idx(next_state)
+                next_state_value = reward + self.state_values[next_idx]
+                next_state_values += [next_state_value]
+            self.policy[idx] = valid_actions[np.argmax(next_state_values)]
+            # self.advantage[idx] = self.state_values[idx] - np.max(next_state_values)
+
+    def eval_policy(self):
+        idx = 0
+        all_states = [self.states[idx]]
+        all_actions = []
+        all_reward = 0
+        while True:
+            action = self.policy[idx]
+            valid_actions = self.env.valid_actions(all_states[-1])
+            if action not in valid_actions:
+                action = 0
+            state, reward, done = self.env.transit(all_states[-1], action)
+            all_actions += [action]
+            all_states += [state]
+            all_reward += reward
+            if done:
+                break
+        print(f"States: {all_states}")
+        print(f"Actions: {all_actions}")
+        print(f"Reward: {all_reward}")
+
+
     def run_vi(self):
-        eps = 1e-3
+        eps = 0.01
         gap = np.inf
         t = 0
         while gap > eps:
             for state in self.states:
                 valid_actions = self.env.valid_actions(state)
-
+                next_state_values = []
+                idx = self.find_idx(state)
+                for action in valid_actions:
+                    next_state, reward, done = self.env.transit(state, action)
+                    next_idx = self.find_idx(next_state)
+                    next_state_value = reward + self.state_values[next_idx]
+                    next_state_values += [next_state_value]
+                self.new_state_values[idx] = np.max(next_state_values)
+            self.diff_values = self.new_state_values - self.state_values
+            self.state_values = self.new_state_values.copy()
+            t += 1
+            gap = self.diff_values.max() - self.diff_values.min()
+            avg_gap = self.diff_values.mean()
+            avg_value = self.state_values.mean()
+            if t % 20 == 0:
+                self.gen_policy()
+                self.eval_policy()
+            print(f"Step {t}: gap = {gap:.6f}, avg_gap = {avg_gap:.6f}, avg_value = {avg_value:.6f}")
+        print(f"Converged at step {t}")
+        self.gen_policy()
+        self.eval_policy()
 
 
 if __name__ == '__main__':
-    pass
+    runner = VIRunner()
+    runner.run_vi()
