@@ -4,13 +4,16 @@ import matplotlib.pyplot as plt
 
 
 class Env:
-    def __init__(self, landsize=3, total_year=10):
+    def __init__(self, landsize=3, total_year=10, water_capacity=10):
+        self.target_habitat = 3
+        self.target_water = 7
         self.landsize = landsize
         self.landuse = None
         self.water = None
         self.year = None
         self.habitat = 0
         self.total_year = total_year
+        self.water_capacity = water_capacity
 
     def valid_actions(self, state):
         self.landuse = np.array(state[0])
@@ -40,7 +43,6 @@ class Env:
                 cost += 1
             elif action == 3:  # wl
                 cost += 3
-                self.habitat += 1
             else:
                 raise ValueError(f"Unknown action: {action}")
 
@@ -48,21 +50,25 @@ class Env:
         reward = -cost * 0.1
         done = self.year >= self.total_year
         self.year = self.year + 1 if not done else self.year
+        self.habitat = (self.landuse > 0).sum()
         if done:
-            if self.habitat < 2:
+            if self.habitat < self.target_habitat:
                 reward -= 1
-            if self.water < 10:
+            else:
+                reward += 1
+            if self.water < self.target_water:
                 reward -= 1
+            else:
+                reward += 1
         return (tuple(self.landuse), self.year, self.water), reward, done
 
     def calc_maintain_cost(self):
-        cost_ag = -0.05 * (self.landuse == 0).sum()
-        cost_ofr = 0.1 * (self.landuse == 2).sum()
-        cost_wl = 0.1 * (self.landuse == 3).sum()
+        cost_ag = -0.01 * (self.landuse == 0).sum()
+        cost_ofr = 0.05 * (self.landuse == 2).sum()
+        cost_wl = 0.07 * (self.landuse == 3).sum()
         self.water += (self.landuse == 2).sum() + (self.landuse == 3).sum()
-        self.water = min(self.water, 10)
+        self.water = min(self.water, self.water_capacity)
         return cost_ag + cost_ofr + cost_wl
-
 
 
 class VIRunner:
@@ -71,7 +77,8 @@ class VIRunner:
         self.actions = [0, 1, 2, 3]
         self.landsize = 3
         self.horizon = 10
-        self.env = Env(landsize=self.landsize, total_year=self.horizon)
+        self.max_water = 10
+        self.env = Env(landsize=self.landsize, total_year=self.horizon, water_capacity=self.max_water)
         self.state_values = {}
         self.new_state_values = {}
         self.policy = {}
@@ -84,7 +91,7 @@ class VIRunner:
     def init_states(self):
         landuse = list(itertools.combinations_with_replacement(self.landtype.keys(), self.landsize))
         year = list(range(1, self.horizon+1))
-        water = list(range(11))
+        water = list(range(0, self.max_water+1))
         states = list(itertools.product(landuse, year, water))
         n_states = len(states)
         self.state_values = np.zeros(n_states)
@@ -122,6 +129,7 @@ class VIRunner:
             if action not in valid_actions:
                 action = 0
             state, reward, done = self.env.transit(all_states[-1], action)
+            idx = self.find_idx(state)
             all_actions += [action]
             all_states += [state]
             all_reward += reward
@@ -133,10 +141,13 @@ class VIRunner:
 
 
     def run_vi(self):
-        eps = 0.01
+        eps = 0.1
         gap = np.inf
         t = 0
         while gap > eps:
+            if t % 1 == 0:
+                self.gen_policy()
+                self.eval_policy()
             for state in self.states:
                 valid_actions = self.env.valid_actions(state)
                 next_state_values = []
@@ -153,10 +164,7 @@ class VIRunner:
             gap = self.diff_values.max() - self.diff_values.min()
             avg_gap = self.diff_values.mean()
             avg_value = self.state_values.mean()
-            if t % 20 == 0:
-                self.gen_policy()
-                self.eval_policy()
-            print(f"Step {t}: gap = {gap:.6f}, avg_gap = {avg_gap:.6f}, avg_value = {avg_value:.6f}")
+            print(f"Step {t}: gap = {gap:.6f}, avg_gap = {avg_gap:.6f}, avg_value = {avg_value:.6f}, policy = {self.policy.sum()}")
         print(f"Converged at step {t}")
         self.gen_policy()
         self.eval_policy()
