@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 """
 0: agricultrual
-1: on-farm recharge
-2: habitat
+1: habitat
+2: on-farm recharge
 3: wetland
 """
 

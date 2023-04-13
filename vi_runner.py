@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 class Env:
     def __init__(self, landsize=3, total_year=10, water_capacity=10):
         self.target_habitat = 3
-        self.target_water = 7
+        self.target_water = 10
         self.landsize = landsize
         self.landuse = None
         self.water = None
@@ -37,12 +37,12 @@ class Env:
             assert 0 in self.landuse, f"No empty land: {self.landuse}"
             self.landuse[np.argwhere(self.landuse == 0)[0]] = action
             if action == 1:  # hbt
-                cost += 2
+                cost += 5 / 3
                 self.habitat += 1
             elif action == 2:  # ofr
-                cost += 1
+                cost += 4 / 3
             elif action == 3:  # wl
-                cost += 3
+                cost += 7 / 3
             else:
                 raise ValueError(f"Unknown action: {action}")
 
@@ -63,9 +63,9 @@ class Env:
         return (tuple(self.landuse), self.year, self.water), reward, done
 
     def calc_maintain_cost(self):
-        cost_ag = -0.01 * (self.landuse == 0).sum()
-        cost_ofr = 0.05 * (self.landuse == 2).sum()
-        cost_wl = 0.07 * (self.landuse == 3).sum()
+        cost_ag = - 0.05 / 3 * (self.landuse == 0).sum()
+        cost_ofr = 0.2 / 3 * (self.landuse == 2).sum()
+        cost_wl = 0.3 / 3 * (self.landuse == 3).sum()
         self.water += (self.landuse == 2).sum() + (self.landuse == 3).sum()
         self.water = min(self.water, self.water_capacity)
         return cost_ag + cost_ofr + cost_wl
@@ -92,7 +92,7 @@ class VIRunner:
         landuse = list(itertools.combinations_with_replacement(self.landtype.keys(), self.landsize))
         year = list(range(1, self.horizon+1))
         water = list(range(0, self.max_water+1))
-        states = list(itertools.product(landuse, year, water))
+        states = list(itertools.product(landuse, year, water))  # TODO: remove unreachable states
         n_states = len(states)
         self.state_values = np.zeros(n_states)
         self.new_state_values = np.zeros(n_states)
@@ -141,7 +141,7 @@ class VIRunner:
 
 
     def run_vi(self):
-        eps = 0.1
+        eps = 0.01
         gap = np.inf
         t = 0
         while gap > eps:
