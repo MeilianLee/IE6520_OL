@@ -50,7 +50,7 @@ class Env:
         reward = -cost * 0.1
         done = self.year >= self.total_year
         self.year = self.year + 1 if not done else self.year
-        self.habitat = (self.landuse > 0).sum()
+        self.habitat = (self.landuse == 1).sum() + (self.landuse == 3).sum()
         if done:
             if self.habitat < self.target_habitat:
                 reward -= 1
