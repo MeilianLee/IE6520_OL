@@ -25,6 +25,7 @@ class Env:
     def transit(self, state, action):
         """
         :param action: 0 - no-op, 1 - 1/3 hbt, 2 - 1/3 ofr, 3 - 1/3 wl
+        :param state: (landuse, year, water)
         :return: next_state, reward, done
         """
         self.landuse = np.array(state[0])
@@ -48,8 +49,14 @@ class Env:
 
             self.landuse.sort()
         reward = -cost * 0.1
-        done = self.year >= self.total_year
-        self.year = self.year + 1 if not done else self.year
+
+        self.year += 1
+        if self.year >= self.total_year:
+            done = True
+            self.year = self.total_year
+        else:
+            done = False
+
         self.habitat = (self.landuse == 1).sum() + (self.landuse == 3).sum()
         if done:
             if self.habitat < self.target_habitat:
@@ -90,7 +97,7 @@ class VIRunner:
 
     def init_states(self):
         landuse = list(itertools.combinations_with_replacement(self.landtype.keys(), self.landsize))
-        year = list(range(1, self.horizon+1))
+        year = list(range(0, self.horizon+1))
         water = list(range(0, self.max_water+1))
         states = list(itertools.product(landuse, year, water))  # TODO: remove unreachable states
         n_states = len(states)
@@ -138,7 +145,6 @@ class VIRunner:
         print(f"States: {all_states}")
         print(f"Actions: {all_actions}")
         print(f"Reward: {all_reward}")
-
 
     def run_vi(self):
         eps = 0.01
