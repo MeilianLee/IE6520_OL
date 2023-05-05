@@ -105,7 +105,7 @@ class Env:
 class VIRunner:
     def __init__(self):
         self.landtype = {0: 'Ag', 1: 'Ofr', 2: 'Wl'}
-        self.landsize = 5
+        self.landsize = 6
         self.horizon = 10
         self.max_water = 3
         self.env = Env(landsize=self.landsize, total_year=self.horizon)
@@ -115,6 +115,7 @@ class VIRunner:
         self.advantage = None
         self.diff_values = None
         self.step = 0
+        self.n_episode = 100
         self.states = self.init_states()
 
     def init_states(self):
@@ -175,8 +176,8 @@ class VIRunner:
         eps = 0.1
         gap = np.inf
         t = 0
-        while gap > eps:
-            if t % 1 == 0:
+        while gap > eps and t < self.n_episode:
+            if t % 10 == 0:
                 self.gen_policy()
                 self.eval_policy()
             for state in self.states:
@@ -197,7 +198,7 @@ class VIRunner:
             avg_value = self.state_values.mean()
             print(f"Step {t}: gap = {gap:.6f}, avg_gap = {avg_gap:.6f}, avg_value = {avg_value:.6f}, policy = {self.policy.sum()}")
             # print(f"Water: {self.env.water: .4f}")
-        print(f"Converged at step {t}")
+        # print(f"Converged at step {t}")
         self.gen_policy()
         self.eval_policy()
 

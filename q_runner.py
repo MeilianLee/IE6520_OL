@@ -113,16 +113,16 @@ class Env:
 class QLearner:
     def __init__(self):
         self.landtype = {0: 'Ag', 1: 'Ofr', 2: 'Wl'}
-        self.landsize = 5
+        self.landsize = 6
         self.horizon = 10
         self.max_water = 3
         self.env = Env(landsize=self.landsize, total_year=self.horizon)
         self.q_table = {}
         self.pi_table = {}
-        self.n_episode = 1000
+        self.n_episode = int(1e5)
         self.lr = 0.01
-        self.gamma = 0.95
-        self.epsilon = 0.1
+        self.gamma = 0.99
+        self.epsilon = 0.3
         self.states = self.init_states()
 
     def init_states(self):
@@ -150,7 +150,7 @@ class QLearner:
         all_actions = []
         all_reward = 0
         while True:
-            action = np.argmax(self.pi_table[all_states[-1]])
+            action = self.find_rand_max_idx(self.pi_table[all_states[-1]])
             valid_actions = self.env.valid_actions(all_states[-1])
             if action not in valid_actions:
                 action = 0
@@ -188,7 +188,7 @@ class QLearner:
                         self.pi_table[state][a] = self.epsilon / len(self.q_table[state])
                 state = new_state
                 action = new_action
-            if episode % 100 == 0:
+            if episode % 1000 == 0:
                 print(f"Episode {episode} finished in {step} steps")
                 self.eval_policy()
 
