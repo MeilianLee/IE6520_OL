@@ -2,13 +2,14 @@ import numpy as np
 import itertools
 import pandas as pd
 import matplotlib.pyplot as plt
+from arguments import arg
 
 
 #%%
 class Env:
     def __init__(self, landsize=3, total_year=10):
-        self.target_habitat = 0.7
-        self.target_water = 0.1
+        self.target_habitat = arg.target_habitat
+        self.target_water = arg.target_water
         self.landsize = landsize
         self.landuse = None
         self.water = 0
@@ -113,8 +114,8 @@ class Env:
 class QLearner:
     def __init__(self):
         self.landtype = {0: 'Ag', 1: 'Ofr', 2: 'Wl'}
-        self.landsize = 6
-        self.horizon = 10
+        self.landsize = arg.landsize
+        self.horizon = arg.horizon
         self.max_water = 3
         self.env = Env(landsize=self.landsize, total_year=self.horizon)
         self.q_table = {}
