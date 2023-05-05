@@ -1,64 +1,54 @@
 import numpy as np
 import itertools
-import pandas as pd
 import matplotlib.pyplot as plt
 
 
-#%%
 class Env:
-    def __init__(self, landsize=3, total_year=10):
-        self.target_habitat = 0.7
-        self.target_water = 0.1
+    def __init__(self, landsize=3, total_year=10, water_capacity=10):
+        self.target_habitat = 3
+        self.target_water = 10
         self.landsize = landsize
         self.landuse = None
-        self.water = 0
-        self.water_state = None
+        self.water = None
         self.year = None
         self.habitat = 0
         self.total_year = total_year
-        self.supply = pd.read_csv('water_supply.csv', header=None).values.flatten()
+        self.water_capacity = water_capacity
 
     def valid_actions(self, state):
         self.landuse = np.array(state[0])
         if 0 not in self.landuse:
             return [0]
         else:
-            return [0, 1, 2]
-
-    def convert_water_state(self):
-        if self.water <= 0:
-            return 0
-        elif self.water < 0.04:
-            return 1
-        elif self.water < 0.08:
-            return 2
-        elif self.water >= 0.08:
-            return 3
+            return [0, 1, 2, 3]
 
     def transit(self, state, action):
         """
-        :param action: 0 - no-op, 1 - 1/3 ofr, 2 - 1/3 wl
+        :param action: 0 - no-op, 1 - 1/3 hbt, 2 - 1/3 ofr, 3 - 1/3 wl
+        :param state: (landuse, year, water)
         :return: next_state, reward, done
         """
         self.landuse = np.array(state[0])
         self.year = state[1]
-        # self.water_state = state[2]
+        self.water = state[2]
         cost = self.calc_maintain_cost()
-        self.water_state = self.convert_water_state()
         if action == 0:
             pass
         else:
             assert 0 in self.landuse, f"No empty land: {self.landuse}"
             self.landuse[np.argwhere(self.landuse == 0)[0]] = action
-            if action == 1:  # ofr
-                cost += 0.27 / self.landsize
-            elif action == 2:  # wl
-                cost += 0.165 / self.landsize
+            if action == 1:  # hbt
+                cost += 5 / 3
+                self.habitat += 1
+            elif action == 2:  # ofr
+                cost += 4 / 3
+            elif action == 3:  # wl
+                cost += 7 / 3
             else:
                 raise ValueError(f"Unknown action: {action}")
 
             self.landuse.sort()
-        reward = -cost
+        reward = -cost * 0.1
 
         self.year += 1
         if self.year >= self.total_year:
@@ -67,54 +57,41 @@ class Env:
         else:
             done = False
 
-        self.habitat = (self.landuse > 0).sum() / self.landsize
+        self.habitat = (self.landuse == 1).sum() + (self.landuse == 3).sum()
         if done:
             if self.habitat < self.target_habitat:
                 reward -= 1
+            else:
+                reward += 1
             if self.water < self.target_water:
                 reward -= 1
-        return (tuple(self.landuse), self.year, self.water_state), reward, done
+            else:
+                reward += 1
+        return (tuple(self.landuse), self.year, self.water), reward, done
 
     def calc_maintain_cost(self):
-        rev_ag = - 0.2 / self.landsize * (self.landuse == 0).sum()
-        rev_ofr = - 0.2 / self.landsize * (self.landuse == 1).sum()
-        cost_ofr = 0.1 / self.landsize * (self.landuse == 1).sum()
-        cost_wl = 0.15 / self.landsize * (self.landuse == 2).sum()
-        recharge_capacity_ofr = 0.085 / self.landsize
-        recharge_capacity_wl = 0.2 / self.landsize
-        demand = 0.381
-        # read csv of water supply (20 years) and use self.year to index
-        d_water = (self.supply[self.year-1] - demand) / self.landsize
-        if d_water > 0:
-            # compare with recharge capacity
-            recharge_volume_ofr = min(recharge_capacity_ofr, d_water)
-            pump_volume = 0
-        else:
-            recharge_volume_ofr = 0
-            pump_volume = -d_water
-        recharge_volume_wl = min(recharge_capacity_wl, self.supply[self.year - 1] / self.landsize)
-        self.water = (self.landuse == 1).sum() * recharge_volume_ofr + (self.landuse == 2).sum() * recharge_volume_wl - \
-                     ((self.landuse == 0) | (self.landuse == 1)).sum() * pump_volume
-        pump_cost = 10 * pump_volume * ((self.landuse == 0) | (self.landuse == 1)).sum()
-        # if pump_cost != 0:
-        #     print(f"pump cost: {pump_cost}", rev_ag, cost_ofr, cost_wl)
-
-        return rev_ag + rev_ofr + cost_ofr + cost_wl + pump_cost
+        cost_ag = - 0.05 / 3 * (self.landuse == 0).sum()
+        cost_ofr = 0.2 / 3 * (self.landuse == 2).sum()
+        cost_wl = 0.3 / 3 * (self.landuse == 3).sum()
+        self.water += (self.landuse == 2).sum() + (self.landuse == 3).sum()
+        self.water = min(self.water, self.water_capacity)
+        return cost_ag + cost_ofr + cost_wl
 
 
 class VIRunner:
     def __init__(self):
-        self.landtype = {0: 'Ag', 1: 'Ofr', 2: 'Wl'}
-        self.actions = [0, 1, 2]
-        self.landsize = 5
+        self.landtype = {0: 'Ag', 1: 'Hbt', 2: 'Ofr', 3: 'Wl'}
+        self.actions = [0, 1, 2, 3]
+        self.landsize = 3
         self.horizon = 10
-        self.max_water = 3
-        self.env = Env(landsize=self.landsize, total_year=self.horizon)
-        self.state_values = None
-        self.new_state_values = None
-        self.policy = None
-        self.advantage = None
-        self.diff_values = None
+        self.max_water = 10
+        self.env = Env(landsize=self.landsize, total_year=self.horizon, water_capacity=self.max_water)
+        self.state_values = {}
+        self.new_state_values = {}
+        self.policy = {}
+        self.advantage = {}
+        self.diff_values = {}
+        self.optim = None
         self.step = 0
         self.states = self.init_states()
 
@@ -122,7 +99,7 @@ class VIRunner:
         landuse = list(itertools.combinations_with_replacement(self.landtype.keys(), self.landsize))
         year = list(range(0, self.horizon+1))
         water = list(range(0, self.max_water+1))
-        states = list(itertools.product(landuse, year, water))
+        states = list(itertools.product(landuse, year, water))  # TODO: remove unreachable states
         n_states = len(states)
         self.state_values = np.zeros(n_states)
         self.new_state_values = np.zeros(n_states)
@@ -165,15 +142,12 @@ class VIRunner:
             all_reward += reward
             if done:
                 break
+        print(f"States: {all_states}")
         print(f"Actions: {all_actions}")
         print(f"Reward: {all_reward}")
-        print(f"Landuse: {self.env.landuse}, {(self.env.landuse > 0).sum() >= self.env.target_habitat}")
-        print(f"Water: {self.env.water}, {self.env.water >= self.env.target_water}")
-        print("=====================================")
-
 
     def run_vi(self):
-        eps = 0.1
+        eps = 0.01
         gap = np.inf
         t = 0
         while gap > eps:
@@ -197,7 +171,6 @@ class VIRunner:
             avg_gap = self.diff_values.mean()
             avg_value = self.state_values.mean()
             print(f"Step {t}: gap = {gap:.6f}, avg_gap = {avg_gap:.6f}, avg_value = {avg_value:.6f}, policy = {self.policy.sum()}")
-            # print(f"Water: {self.env.water: .4f}")
         print(f"Converged at step {t}")
         self.gen_policy()
         self.eval_policy()
