@@ -5,4 +5,5 @@ class Arguments:
     target_water = 0.1
     random_supply = True
 
+
 arg = Arguments()
