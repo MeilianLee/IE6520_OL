@@ -36,7 +36,7 @@ class Env:
         elif self.water >= 0.08:
             return 3
 
-    def step(self, state, action):
+    def step(self, state, action, eval=False):
         """
         :param action: 0 - no-op, 1 - 1/3 ofr, 2 - 1/3 wl
         :return: next_state, reward, done
@@ -44,7 +44,7 @@ class Env:
         self.landuse = np.array(state[0])
         self.year = state[1]
         # self.water_state = state[2]
-        cost = self.calc_maintain_cost()
+        cost = self.calc_maintain_cost(eval)
         self.water_state = self.convert_water_state()
         if action == 0:
             pass
@@ -76,7 +76,7 @@ class Env:
                 reward -= 1
         return (tuple(self.landuse), self.year, self.water_state), reward, done
 
-    def calc_maintain_cost(self):
+    def calc_maintain_cost(self, eval=False):
         rev_ag = - 0.2 / self.landsize * (self.landuse == 0).sum()
         rev_ofr = - 0.2 / self.landsize * (self.landuse == 1).sum()
         cost_ofr = 0.1 / self.landsize * (self.landuse == 1).sum()
@@ -84,8 +84,9 @@ class Env:
         recharge_capacity_ofr = 0.085 / self.landsize
         recharge_capacity_wl = 0.2 / self.landsize
         demand = 0.381
+        supply = np.random.normal(0.391, 0.01) if arg.random_supply and not eval else self.supply[self.year-1]
         # read csv of water supply (20 years) and use self.year to index
-        d_water = (self.supply[self.year-1] - demand) / self.landsize
+        d_water = (supply - demand) / self.landsize
         if d_water > 0:
             # compare with recharge capacity
             recharge_volume_ofr = min(recharge_capacity_ofr, d_water)
@@ -93,7 +94,7 @@ class Env:
         else:
             recharge_volume_ofr = 0
             pump_volume = -d_water
-        recharge_volume_wl = min(recharge_capacity_wl, self.supply[self.year - 1] / self.landsize)
+        recharge_volume_wl = min(recharge_capacity_wl, supply / self.landsize)
         self.water = (self.landuse == 1).sum() * recharge_volume_ofr + (self.landuse == 2).sum() * recharge_volume_wl - \
                      ((self.landuse == 0) | (self.landuse == 1)).sum() * pump_volume
         pump_cost = 10 * pump_volume * ((self.landuse == 0) | (self.landuse == 1)).sum()
@@ -159,7 +160,7 @@ class VIRunner:
             valid_actions = self.env.valid_actions(all_states[-1])
             if action not in valid_actions:
                 action = 0
-            state, reward, done = self.env.step(all_states[-1], action)
+            state, reward, done = self.env.step(all_states[-1], action, eval=True)
             idx = self.find_idx(state)
             all_actions += [action]
             all_states += [state]
