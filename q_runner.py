@@ -39,7 +39,7 @@ class QLearner:
         action = np.random.choice(idx_list)
         return action
 
-    def eval_policy(self):
+    def eval_policy(self, eval=True):
         all_states = [self.env.reset()]
         all_actions = []
         all_reward = 0
@@ -48,7 +48,7 @@ class QLearner:
             valid_actions = self.env.valid_actions(all_states[-1])
             if action not in valid_actions:
                 action = 0
-            state, reward, done = self.env.step(all_states[-1], action, eval=True)
+            state, reward, done = self.env.step(all_states[-1], action, eval=eval)
             all_actions += [action]
             all_states += [state]
             all_reward += reward
@@ -56,7 +56,7 @@ class QLearner:
                 break
         print(f"Actions: {all_actions}")
         print(f"Reward: {all_reward}")
-        print(f"Landuse: {self.env.landuse}, {(self.env.landuse > 0).sum() >= self.env.target_habitat}")
+        print(f"Landuse: {self.env.landuse}, {(self.env.landuse > 1).sum() >= self.env.target_habitat}")
         print(f"Water: {self.env.water}, {self.env.water >= self.env.target_water}")
         print("=====================================")
 
@@ -85,7 +85,6 @@ class QLearner:
             if episode % 1000 == 0:
                 print(f"Episode {episode} finished in {step} steps")
                 self.eval_policy()
-
 
 
 if __name__ == '__main__':
