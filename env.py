@@ -82,8 +82,8 @@ class Env:
         return (tuple(self.landuse), self.year, self.water_state), reward, done
 
     def calc_maintain_cost(self, eval=False):
-        rev_ag = - 0.6 / self.landsize * (self.landuse == 0).sum()
-        rev_ofr = - 0.6 / self.landsize * (self.landuse == 1).sum()
+        rev_ag = - 0.8 / self.landsize * (self.landuse == 0).sum()
+        rev_ofr = - 0.8 / self.landsize * (self.landuse == 1).sum()
         cost_ofr = 0.1 / self.landsize * (self.landuse == 1).sum()
         cost_wl = 0.15 / self.landsize * (self.landuse == 2).sum()
         recharge_capacity_ofr = 0.085 / self.landsize
@@ -100,7 +100,7 @@ class Env:
             recharge_volume_ofr = 0
             pump_volume = -d_water
         recharge_volume_wl = min(recharge_capacity_wl, supply / self.landsize)
-        self.water = (self.landuse == 1).sum() * recharge_volume_ofr + (self.landuse == 2).sum() * recharge_volume_wl - \
+        self.water += (self.landuse == 1).sum() * recharge_volume_ofr + (self.landuse == 2).sum() * recharge_volume_wl - \
                      ((self.landuse == 0) | (self.landuse == 1)).sum() * pump_volume
         pump_cost = 10 * pump_volume * ((self.landuse == 0) | (self.landuse == 1)).sum()
         # if pump_cost != 0:
